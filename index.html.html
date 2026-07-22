@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Base Runner</title>
+<style>
+  :root{
+    --bg:#0A0B0D;
+    --bg-2:#0F1420;
+    --base-blue:#0052FF;
+    --base-blue-glow:#3D7BFF;
+    --ink:#F5F7FA;
+    --ink-dim:#8A93A6;
+    --gold:#FFB800;
+    --danger:#FF5C4D;
+    --line:#1C2233;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:var(--bg); overflow:hidden;
+    font-family:'Inter',-apple-system,system-ui,sans-serif;
+    color:var(--ink);
+    touch-action:manipulation;
+    user-select:none;
+  }
+  #wrap{
+    position:relative; width:100%; height:100vh; height:100dvh;
+    display:flex; flex-direction:column;
+  }
+  canvas{
+    position:absolute; inset:0; width:100%; height:100%; display:block;
+  }
+
+  /* ---- HUD top ---- */
+  #hud{
+    position:relative; z-index:5;
+    display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center;
+    gap:8px;
+    padding:calc(14px + env(safe-area-inset-top,0px)) 16px 0 16px;
+    font-family:'JetBrains Mono','Courier New',monospace;
+  }
+  #walletChip{ max-width:38vw; overflow:hidden; }
+  #walletChip span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hud-chip{
+    background:rgba(15,20,32,0.75);
+    border:1px solid var(--line);
+    backdrop-filter:blur(6px);
+    border-radius:10px;
+    padding:6px 12px;
+    font-size:13px;
+    display:flex; align-items:center; gap:6px;
+    letter-spacing:0.02em;
+  }
+  .hud-chip b{ color:var(--ink); font-size:15px; font-weight:700;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--base-blue-glow); box-shadow:0 0 6px var(--base-blue-glow);}
+  #coinChip b{color:var(--gold);}
+  .icon-btn{
+    padding:6px 10px; font-size:14px; line-height:1;
+    background:rgba(15,20,32,0.75); color:var(--ink);
+  }
+  .icon-btn:active{ transform:scale(0.9); }
+
+  @media (max-width:380px){
+    .hud-chip{ padding:5px 8px; font-size:11px; }
+    .hud-chip b{ font-size:13px; }
+    #hud{ gap:6px; }
+    #bottomBar button{ font-size:12.5px; padding:13px 10px; }
+  }
+
+  /* ---- pause overlay ---- */
+  #pauseOverlay{
+    position:absolute; inset:0; z-index:25;
+    background:rgba(5,6,9,0.86); backdrop-filter:blur(3px);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px;
+  }
+  #pauseOverlay.hidden{ display:none; }
+  #pauseOverlay h2{ margin:0; font-size:24px; letter-spacing:-0.01em; }
+  #pauseOverlay .stat{
+    font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--ink-dim);
+  }
+
+  /* ---- leaderboard ---- */
+  #lbBtn{
+    padding:6px 10px; font-size:14px; line-height:1;
+    background:rgba(15,20,32,0.75); color:var(--gold);
+  }
+  #lbOverlay{
+    position:absolute; inset:0; z-index:26;
+    background:rgba(5,6,9,0.88); backdrop-filter:blur(3px);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  #lbOverlay.hidden{ display:none; }
+  .lb-card{
+    width:100%; max-width:340px; max-height:80vh;
+    background:var(--bg-2); border:1px solid var(--line);
+    border-radius:18px; padding:20px;
+    display:flex; flex-direction:column;
+  }
+  .lb-card h3{ margin:0; font-size:17px; letter-spacing:-0.01em; display:flex; align-items:center; gap:8px;}
+  .lb-card .sub{ color:var(--ink-dim); font-size:11.5px; margin:2px 0 14px 0; font-family:'JetBrains Mono',monospace;}
+  #lbOnChain{
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(0,82,255,0.08); border:1px solid var(--base-blue);
+    border-radius:10px; padding:10px 12px; margin-bottom:12px;
+    font-family:'JetBrains Mono',monospace; font-size:12px;
+  }
+  #lbOnChain b{ color:var(--base-blue-glow); font-size:15px; }
+  #lbList{
+    list-style:none; margin:0; padding:0;
+    overflow-y:auto; flex:1;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  #lbList li{
+    display:flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--line);
+    border-radius:10px; padding:9px 12px;
+    font-family:'JetBrains Mono',monospace; font-size:12.5px;
+  }
+  #lbList li.me{ border-color:var(--base-blue); background:rgba(0,82,255,0.08); }
+  #lbList .rank{
+    width:22px; text-align:center; font-weight:700; color:var(--ink-dim);
+    flex-shrink:0;
+  }
+  #lbList li:nth-child(1) .rank{ color:var(--gold); }
+  #lbList li:nth-child(2) .rank{ color:#C9D2E3; }
+  #lbList li:nth-child(3) .rank{ color:#CD8A4E; }
+  #lbList .addr{ flex:1; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #lbList .dist{ color:var(--base-blue-glow); font-weight:700;}
+  #lbList .coins{ color:var(--gold); font-size:11px; min-width:44px; text-align:end;}
+  #lbEmpty{ color:var(--ink-dim); font-size:12.5px; text-align:center; padding:30px 10px; font-family:'JetBrains Mono',monospace;}
+  #lbCloseBtn{
+    margin-top:14px; background:var(--base-blue); color:#fff; font-family:'Inter',sans-serif;
+  }
+  #resumeBtn{
+    background:var(--base-blue); color:#fff; padding:14px 36px; font-size:15px; border-radius:16px;
+    box-shadow:0 0 24px rgba(0,82,255,0.35);
+  }
+
+  /* ---- ledger strip (signature element) ---- */
+  #ledger{
+    position:relative; z-index:5;
+    margin:8px 16px 0 16px;
+    height:22px;
+    border-radius:6px;
+    background:linear-gradient(90deg, rgba(0,82,255,0.08), rgba(0,82,255,0.02));
+    border:1px solid var(--line);
+    overflow:hidden;
+    display:flex; align-items:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px; color:var(--ink-dim);
+    white-space:nowrap;
+  }
+  #ledgerTrack{ display:flex; gap:18px; padding-inline-start:12px; will-change:transform; }
+  .block{ display:flex; align-items:center; gap:5px; opacity:0.85;}
+  .block .h{ color:var(--base-blue-glow); }
+  .block.filled .h{ color:var(--gold); }
+
+  /* ---- bottom action bar ---- */
+  #bottomBar{
+    position:relative; z-index:5; margin-top:auto;
+    padding:0 16px calc(18px + env(safe-area-inset-bottom,0px)) 16px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  #actionRow{ display:flex; gap:10px; }
+  button{
+    font-family:inherit; border:none; cursor:pointer;
+    border-radius:14px; padding:14px 16px;
+    font-size:14px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:transform .12s ease, filter .12s ease;
+  }
+  button:active{ transform:scale(0.96); }
+  #connectBtn{
+    flex:1; background:var(--base-blue); color:#fff;
+  }
+  #connectBtn.connected{ background:#141A2A; color:var(--ink-dim); border:1px solid var(--line);}
+  #checkinBtn{
+    flex:1; background:transparent; color:var(--base-blue-glow);
+    border:1.5px solid var(--base-blue);
+  }
+  #checkinBtn:disabled{ border-color:var(--line); color:var(--ink-dim); filter:none; cursor:default; }
+  #checkinBtn.done{ background:rgba(0,82,255,0.08); }
+  #claimBtn{
+    flex:1.3; background:var(--gold); color:#1A1400;
+    display:none;
+  }
+  #claimBtn.ready{ display:flex; }
+  #claimBtn:disabled{ filter:grayscale(0.6); opacity:0.7; }
+
+  /* ---- start / game-over overlay ---- */
+  #overlay{
+    position:absolute; inset:0; z-index:20;
+    background:rgba(10,11,13,0.92);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:16px; padding:24px;
+  }
+  #overlay.hidden{ display:none; }
+  #overlay h1{
+    font-size:30px; margin:0; letter-spacing:-0.02em;
+    background:linear-gradient(90deg,#fff,var(--base-blue-glow));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  #overlay p{ color:var(--ink-dim); font-size:14px; max-width:280px; margin:0; line-height:1.5;}
+  #overlay .stat{ font-family:'JetBrains Mono',monospace; font-size:44px; font-weight:800; color:var(--ink);}
+  #playBtn{
+    background:var(--base-blue); color:#fff; padding:16px 40px; font-size:16px; border-radius:16px;
+    box-shadow:0 0 30px rgba(0,82,255,0.4);
+  }
+  .logo-hex{
+    width:44px;height:44px; background:var(--base-blue);
+    clip-path:polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display:flex;align-items:center;justify-content:center; font-weight:800; font-size:18px;
+  }
+
+  /* ---- claim receipt modal ---- */
+  #receipt{
+    position:absolute; inset:0; z-index:30;
+    background:rgba(5,6,9,0.82); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  #receipt.hidden{ display:none; }
+  .receipt-card{
+    width:100%; max-width:320px;
+    background:var(--bg-2); border:1px solid var(--line);
+    border-radius:18px; padding:22px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .receipt-card h3{ margin:0 0 4px 0; font-family:'Inter',sans-serif; font-size:17px; letter-spacing:-0.01em;}
+  .receipt-card .sub{ color:var(--ink-dim); font-size:12px; margin-bottom:16px;}
+  .row{ display:flex; justify-content:space-between; padding:8px 0; border-top:1px dashed var(--line); font-size:12.5px;}
+  .row span:first-child{ color:var(--ink-dim); }
+  .row span:last-child{ color:var(--ink); }
+  .receipt-actions{ display:flex; gap:8px; margin-top:18px; }
+  .receipt-actions button{ flex:1; font-family:'Inter',sans-serif; }
+  #claimConfirm{ background:var(--base-blue); color:#fff; }
+  #claimCancel{ background:transparent; color:var(--ink-dim); border:1px solid var(--line); }
+  #txStatus{ font-size:11px; color:var(--ink-dim); text-align:center; margin-top:10px; min-height:14px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="hud-chip"><span class="dot"></span><b id="distVal">0</b>&nbsp;m</div>
+    <div class="hud-chip" id="coinChip">🪙 <b id="coinVal">0</b></div>
+    <div class="hud-chip" id="walletChip">⛓ <span id="walletVal">Offline</span></div>
+    <button id="lbBtn" class="hud-chip icon-btn" aria-label="Leaderboard">🏆</button>
+    <button id="pauseBtn" class="hud-chip icon-btn" aria-label="Pause" style="display:none;">⏸</button>
+  </div>
+
+  <div id="ledger"><div id="ledgerTrack"></div></div>
+
+  <div id="bottomBar">
+    <button id="connectBtn">Connect Base Wallet</button>
+    <div id="actionRow">
+      <button id="checkinBtn">Daily Check-in ⬢</button>
+      <button id="claimBtn">Claim Daily Run ⬢</button>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="logo-hex">⬢</div>
+    <h1>Base Runner</h1>
+    <p>Tap the screen or press Space to jump. Dodge obstacles, collect a Base coin every 100m, and claim your Daily Run reward on-chain every 500m.</p>
+    <button id="playBtn">Start Game</button>
+    <button id="startLbBtn" style="background:transparent;color:var(--ink-dim);border:1px solid var(--line);">🏆 Leaderboard</button>
+  </div>
+
+  <div id="pauseOverlay" class="hidden">
+    <div class="logo-hex">⏸</div>
+    <h2>Paused</h2>
+    <div class="stat" id="pauseStat">0 m &nbsp;·&nbsp; 0 🪙</div>
+    <button id="resumeBtn">Resume</button>
+  </div>
+
+  <div id="lbOverlay" class="hidden">
+    <div class="lb-card">
+      <h3>🏆 Leaderboard</h3>
+      <div class="sub">Best runs this session, ranked by distance</div>
+      <div id="lbOnChain" style="display:none;"></div>
+      <ul id="lbList"></ul>
+      <div id="lbEmpty" style="display:none;">No runs yet — finish a run to appear here.</div>
+      <button id="lbCloseBtn">Close</button>
+    </div>
+  </div>
+
+  <div id="receipt" class="hidden">
+    <div class="receipt-card">
+      <h3 id="rcTitle">Daily Run Claim</h3>
+      <div class="sub" id="rcSub">Record transaction on the Base network</div>
+      <div class="row" id="rcDistRow"><span>Distance</span><span id="rcDist">0 m</span></div>
+      <div class="row"><span>Network</span><span>Base</span></div>
+      <div class="row" id="rcRewardRow"><span>Reward</span><span id="rcReward">+0 BASE-XP</span></div>
+      <div class="row"><span>Est. gas cost</span><span>&lt; $0.001</span></div>
+      <div class="receipt-actions">
+        <button id="claimCancel">Later</button>
+        <button id="claimConfirm">Confirm &amp; Claim</button>
+      </div>
+      <div id="txStatus"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   BASE RUNNER — endless runner mini-app for Base
+   On-chain hooks are marked with ⛓. Replace CONTRACT_ADDRESS
+   and CONTRACT_ABI with your deployed Base contract before
+   shipping. Everything else runs fully client-side.
+   ========================================================= */
+
+// ---------- ⛓ ON-CHAIN CONFIG (placeholder — replace me) ----------
+const CHAIN = {
+  id: 8453,                     // Base mainnet. Use 84532 for Base Sepolia while testing.
+  hex: '0x2105',
+  name: 'Base',
+  rpc: 'https://mainnet.base.org',
+  explorer: 'https://basescan.org',
+};
+const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000dEaD'; // TODO: put your deployed contract here
+// Minimal ABI: function claimDailyRun(uint256 distanceMeters) — emits DailyRunClaimed
+const CONTRACT_ABI = [
+  'function claimDailyRun(uint256 distanceMeters) external',
+  'function dailyCheckIn() external',
+  'function bestDistanceOf(address player) view returns (uint256)',
+  'function lastCheckInOf(address player) view returns (uint256)',
+];
+const CHECK_IN_COOLDOWN_SEC = 24*60*60; // must match the contract's cooldown
+
+let provider = null;     // ethers.BrowserProvider
+let readProvider = null; // read-only provider, works even without a connected wallet
+let onChainBest = 0;      // meters, fetched from the contract
+let lastCheckInAt = 0;    // unix seconds, fetched from the contract
+let signer = null;
+let userAddress = null;
+
+// ---------- DOM ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const distValEl = document.getElementById('distVal');
+const coinValEl = document.getElementById('coinVal');
+const walletValEl = document.getElementById('walletVal');
+const walletChip = document.getElementById('walletChip');
+const connectBtn = document.getElementById('connectBtn');
+const claimBtn = document.getElementById('claimBtn');
+const checkinBtn = document.getElementById('checkinBtn');
+const overlay = document.getElementById('overlay');
+const playBtn = document.getElementById('playBtn');
+const receipt = document.getElementById('receipt');
+const rcTitle = document.getElementById('rcTitle');
+const rcSub = document.getElementById('rcSub');
+const rcDistRow = document.getElementById('rcDistRow');
+const rcRewardRow = document.getElementById('rcRewardRow');
+const rcDist = document.getElementById('rcDist');
+const rcReward = document.getElementById('rcReward');
+const claimConfirm = document.getElementById('claimConfirm');
+const claimCancel = document.getElementById('claimCancel');
+const txStatus = document.getElementById('txStatus');
+const ledgerTrack = document.getElementById('ledgerTrack');
+const pauseBtn = document.getElementById('pauseBtn');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const resumeBtn = document.getElementById('resumeBtn');
+const pauseStat = document.getElementById('pauseStat');
+const lbBtn = document.getElementById('lbBtn');
+const lbOverlay = document.getElementById('lbOverlay');
+const lbList = document.getElementById('lbList');
+const lbEmpty = document.getElementById('lbEmpty');
+const lbOnChain = document.getElementById('lbOnChain');
+const lbCloseBtn = document.getElementById('lbCloseBtn');
+
+function resize(){
+  canvas.width = window.innerWidth * devicePixelRatio;
+  canvas.height = window.innerHeight * devicePixelRatio;
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+window.addEventListener('resize', ()=>{ resize(); initSpaceField(); });
+window.addEventListener('orientationchange', ()=> setTimeout(()=>{ resize(); initSpaceField(); }, 200));
+resize();
+
+// ---------- GAME STATE ----------
+const GROUND_Y_RATIO = 0.72;
+let W = () => window.innerWidth;
+let H = () => window.innerHeight;
+
+let state = 'idle'; // idle | running | paused-claim | dead
+let distance = 0;         // meters
+let coins = 0;
+let speed = 4;             // px per frame base
+let lastClaimStep = 0;     // last 500m step claimed
+let lastCoinStep = 0;      // last 100m step collected
+let obstacles = [];
+let particles = [];
+let coinSprite = null;     // {x, collected}
+let frame = 0;
+let bgOffset = 0;
+
+// ---------- SPACE BACKGROUND (stars + planets) ----------
+let stars = [];
+let planets = [];
+
+function initSpaceField(){
+  const w = W(), h = H();
+  stars = [];
+  const starCount = 110;
+  for(let i=0;i<starCount;i++){
+    stars.push({
+      x: Math.random()*w,
+      y: Math.random()*(h*GROUND_Y_RATIO),
+      r: Math.random()*1.6 + 0.4,
+      layer: Math.random() < 0.55 ? 1 : 2,
+      seed: Math.random()*Math.PI*2,
+      tSpeed: 0.02 + Math.random()*0.05,
+    });
+  }
+  const palettes = [
+    ['#FF9D6C','#B84A1E'], // rusty orange planet
+    ['#8FD3FF','#2C6E9E'], // icy blue ringed planet
+    ['#C9A6FF','#5B3E96'], // purple moon
+    ['#8CFFC0','#1E9E6A'], // green gas giant
+  ];
+  planets = [];
+  const planetCount = 3;
+  for(let i=0;i<planetCount;i++){
+    const pal = palettes[Math.floor(Math.random()*palettes.length)];
+    planets.push({
+      x: Math.random()*w,
+      y: 20 + Math.random()*(h*GROUND_Y_RATIO*0.55),
+      r: 10 + Math.random()*24,
+      color1: pal[0], color2: pal[1],
+      ring: Math.random() < 0.4,
+      speed: 0.05 + Math.random()*0.18,
+    });
+  }
+}
+initSpaceField();
+
+function drawStars(){
+  ctx.fillStyle = '#F5F7FA';
+  for(const s of stars){
+    const twinkle = 0.4 + 0.6*Math.sin(frame*s.tSpeed + s.seed);
+    ctx.globalAlpha = Math.max(0.15, twinkle);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    ctx.fill();
+    s.x -= speed * (s.layer===1 ? 0.06 : 0.16);
+    if(s.x < -4){
+      s.x = W()+4;
+      s.y = Math.random()*(H()*GROUND_Y_RATIO);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPlanets(){
+  for(const p of planets){
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    const grad = ctx.createRadialGradient(-p.r*0.35,-p.r*0.35,p.r*0.15, 0,0,p.r);
+    grad.addColorStop(0, p.color1);
+    grad.addColorStop(1, p.color2);
+    ctx.shadowColor = p.color1;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0,0,p.r,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if(p.ring){
+      ctx.strokeStyle = 'rgba(245,247,250,0.45)';
+      ctx.lineWidth = Math.max(1.5, p.r*0.09);
+      ctx.beginPath();
+      ctx.ellipse(0,0,p.r*1.75,p.r*0.55,-0.32,0,Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    p.x -= p.speed;
+    if(p.x < -p.r*2.5){
+      p.x = W()+p.r*2.5;
+      p.y = 20 + Math.random()*(H()*GROUND_Y_RATIO*0.55);
+    }
+  }
+}
+
+function drawNebula(){
+  const w=W(), h=H();
+  const spots = [
+    {x:w*0.15, y:h*0.14, r:200, color:'rgba(123,58,237,0.10)'},
+    {x:w*0.85, y:h*0.32, r:240, color:'rgba(0,82,255,0.10)'},
+  ];
+  for(const s of spots){
+    const g = ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);
+    g.addColorStop(0, s.color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,w,h);
+  }
+}
+
+const player = {
+  x: 90, y:0, w:34, h:42,
+  vy:0, jumping:false, groundY:0,
+};
+
+function resetGame(){
+  distance = 0; coins = 0; speed = 4;
+  lastClaimStep = 0; lastCoinStep = 0;
+  obstacles = []; particles = []; coinSprite = null;
+  frame = 0; bgOffset = 0;
+  player.groundY = H()*GROUND_Y_RATIO - player.h;
+  player.y = player.groundY;
+  player.vy = 0; player.jumping = false;
+  spawnObstacle(true);
+  updateHUD();
+  buildLedger();
+}
+
+function spawnObstacle(first){
+  const gap = first ? 500 : (280 + Math.random()*260);
+  const lastX = obstacles.length ? obstacles[obstacles.length-1].x : W()+100;
+  const type = Math.random() < 0.25 ? 'tall' : 'spike';
+  const h = type === 'tall' ? 54 : 30;
+  obstacles.push({
+    x: lastX + gap,
+    w: type==='tall'? 26: 34,
+    h,
+    type,
+  });
+}
+
+function jump(){
+  if(state === 'idle'){ startGame(); return; }
+  if(state !== 'running') return;
+  if(!player.jumping){
+    player.vy = -12.4;
+    player.jumping = true;
+  }
+}
+
+function startGame(){
+  resetGame();
+  state = 'running';
+  overlay.classList.add('hidden');
+  pauseOverlay.classList.add('hidden');
+  pauseBtn.style.display = 'flex';
+}
+
+function gameOver(){
+  state = 'dead';
+  overlay.classList.remove('hidden');
+  pauseBtn.style.display = 'none';
+  addLeaderboardEntry(Math.floor(distance), coins);
+  overlay.innerHTML = `
+    <div class="logo-hex">⬢</div>
+    <h1>You crashed!</h1>
+    <div class="stat">${Math.floor(distance)} m</div>
+    <p>Coins collected: ${coins} 🪙 — try again and get your run recorded on-chain.</p>
+    <button id="playBtn">Play Again</button>
+    <button id="viewLbBtn" style="background:transparent;color:var(--ink-dim);border:1px solid var(--line);">View Leaderboard</button>
+  `;
+  document.getElementById('playBtn').addEventListener('click', startGame);
+  document.getElementById('viewLbBtn').addEventListener('click', openLeaderboard);
+}
+
+// ---------- LEADERBOARD (in-memory, current session) ----------
+// NOTE: this list lives only in page memory and resets on reload — there is
+// no backend here. For a persistent, cross-device leaderboard once this
+// mini-app is deployed for real, either (a) write best-run data to your
+// on-chain contract (e.g. a `bestDistance` mapping updated in
+// claimDailyRun) and read it back with a view call, or (b) add a small
+// backend/KV store keyed by wallet address. localStorage would also work
+// once hosted on your own domain, but is intentionally not used here.
+let leaderboard = [];
+
+function addLeaderboardEntry(distM, coinCount){
+  if(distM <= 0) return;
+  const label = userAddress ? (userAddress.slice(0,6)+'…'+userAddress.slice(-4)) : 'Guest';
+  leaderboard.push({ label, distance: distM, coins: coinCount, mine: !!userAddress });
+  leaderboard.sort((a,b)=> b.distance - a.distance);
+  leaderboard = leaderboard.slice(0, 10);
+}
+
+function renderLeaderboard(){
+  if(leaderboard.length === 0){
+    lbList.innerHTML = '';
+    lbEmpty.style.display = 'block';
+    return;
+  }
+  lbEmpty.style.display = 'none';
+  lbList.innerHTML = leaderboard.map((e,i)=> `
+    <li class="${e.mine ? 'me' : ''}">
+      <span class="rank">${i+1}</span>
+      <span class="addr">${e.label}</span>
+      <span class="dist">${e.distance} m</span>
+      <span class="coins">🪙 ${e.coins}</span>
+    </li>
+  `).join('');
+}
+
+function openLeaderboard(){
+  renderLeaderboard();
+  if(userAddress){
+    lbOnChain.style.display = 'flex';
+    lbOnChain.innerHTML = `<span>⛓ Your on-chain best</span><b>${onChainBest} m</b>`;
+    refreshOnChainStats().then(()=>{
+      if(!lbOverlay.classList.contains('hidden')){
+        lbOnChain.innerHTML = `<span>⛓ Your on-chain best</span><b>${onChainBest} m</b>`;
+      }
+    });
+  } else {
+    lbOnChain.style.display = 'none';
+  }
+  lbOverlay.classList.remove('hidden');
+}
+function closeLeaderboard(){
+  lbOverlay.classList.add('hidden');
+}
+lbBtn.addEventListener('click', openLeaderboard);
+lbCloseBtn.addEventListener('click', closeLeaderboard);
+document.getElementById('startLbBtn').addEventListener('click', openLeaderboard);
+
+
+// ---------- INPUT ----------
+window.addEventListener('keydown', e=>{
+  if(e.code === 'Space' || e.code==='ArrowUp'){ e.preventDefault(); jump(); }
+  if(e.code === 'Escape' || e.code === 'KeyP'){ e.preventDefault(); togglePause(); }
+});
+canvas.addEventListener('pointerdown', ()=>{
+  if(state === 'paused') return; // ignore taps on the canvas while paused
+  jump();
+});
+playBtn.addEventListener('click', startGame);
+pauseBtn.addEventListener('click', togglePause);
+resumeBtn.addEventListener('click', togglePause);
+
+function togglePause(){
+  if(state === 'running'){
+    state = 'paused';
+    pauseStat.textContent = `${Math.floor(distance)} m · ${coins} 🪙`;
+    pauseOverlay.classList.remove('hidden');
+    pauseBtn.textContent = '⏸';
+  } else if(state === 'paused'){
+    state = 'running';
+    pauseOverlay.classList.add('hidden');
+  }
+  // no-op for idle / dead / paused-claim — pausing only makes sense mid-run
+}
+
+// ---------- HUD / LEDGER ----------
+function updateHUD(){
+  distValEl.textContent = Math.floor(distance);
+  coinValEl.textContent = coins;
+}
+
+function buildLedger(){
+  // signature element: a scrolling "block" ledger — each block = 100m checkpoint
+  let html = '';
+  for(let i=0;i<40;i++){
+    html += `<div class="block" data-step="${i}"><span class="h">#${(i+1)*100}m</span><span>${i%5===4?'⬢':'○'}</span></div>`;
+  }
+  ledgerTrack.innerHTML = html;
+}
+function scrollLedger(){
+  const per100 = 90; // px per checkpoint visual pace
+  const offset = (distance/100)*per100;
+  ledgerTrack.style.transform = `translateX(${-offset}px)`;
+  // mark filled blocks
+  const step = Math.floor(distance/100);
+  ledgerTrack.querySelectorAll('.block').forEach((b,i)=>{
+    if(i <= step) b.classList.add('filled');
+  });
+}
+
+// ---------- RENDER ----------
+function drawBackground(){
+  const w=W(), h=H();
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'#05050C');
+  grad.addColorStop(1,'#0C1024');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+
+  // soft nebula glow patches
+  drawNebula();
+
+  // distant planets drifting past
+  drawPlanets();
+
+  // twinkling starfield
+  drawStars();
+
+  // parallax hex grid dots (Base-flavored ambience, now reads as faint stardust)
+  bgOffset = (bgOffset + speed*0.15) % 60;
+  ctx.fillStyle = 'rgba(0,82,255,0.10)';
+  for(let x=-60; x<w+60; x+=60){
+    for(let y=40; y<h*GROUND_Y_RATIO; y+=60){
+      ctx.beginPath();
+      ctx.arc(x - bgOffset, y, 1.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // ground line
+  const gY = h*GROUND_Y_RATIO;
+  ctx.strokeStyle = 'rgba(61,123,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0,gY); ctx.lineTo(w,gY); ctx.stroke();
+
+  // moving ground ticks
+  ctx.strokeStyle = 'rgba(138,147,166,0.25)';
+  ctx.lineWidth = 1;
+  const tickOffset = (frame*speed) % 40;
+  for(let x=-40; x<w+40; x+=40){
+    const tx = x - tickOffset;
+    ctx.beginPath(); ctx.moveTo(tx,gY); ctx.lineTo(tx-10,gY+10); ctx.stroke();
+  }
+}
+
+function drawPlayer(){
+  const p = player;
+  const x = p.x, y = p.y, w = p.w, h = p.h;
+  const cx = x + w/2;
+  ctx.save();
+
+  const legPhase = Math.sin(frame*0.4);
+  const armPhase = Math.sin(frame*0.4 + Math.PI); // opposite phase to legs
+
+  // ---- legs ----
+  ctx.strokeStyle = '#1C2233';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  if(!p.jumping){
+    ctx.moveTo(cx-5, y+h-6); ctx.lineTo(cx-5+legPhase*7, y+h+9);
+    ctx.moveTo(cx+5, y+h-6); ctx.lineTo(cx+5-legPhase*7, y+h+9);
+  } else {
+    ctx.moveTo(cx-5, y+h-6); ctx.lineTo(cx-9, y+h+9);
+    ctx.moveTo(cx+5, y+h-6); ctx.lineTo(cx+9, y+h+9);
+  }
+  ctx.stroke();
+  // sneakers
+  ctx.fillStyle = '#F5F7FA';
+  const footL = p.jumping ? {x:cx-9,y:y+h+9} : {x:cx-5+legPhase*7, y:y+h+9};
+  const footR = p.jumping ? {x:cx+9,y:y+h+9} : {x:cx+5-legPhase*7, y:y+h+9};
+  ctx.beginPath(); ctx.ellipse(footL.x-1, footL.y+1, 3.4, 2.2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(footR.x+1, footR.y+1, 3.4, 2.2, 0, 0, Math.PI*2); ctx.fill();
+
+  // ---- arms (hoodie sleeves) ----
+  ctx.strokeStyle = '#1A46C4';
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx-9, y+18); ctx.lineTo(cx-9+armPhase*6, y+31);
+  ctx.moveTo(cx+9, y+18); ctx.lineTo(cx+9-armPhase*6, y+31);
+  ctx.stroke();
+
+  // ---- hoodie body ----
+  ctx.shadowColor = 'rgba(0,82,255,0.5)';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#2B63F5';
+  roundRect(ctx, x+3, y+14, w-6, h-16, 9);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // hoodie pocket
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  roundRect(ctx, x+8, y+h-17, w-16, 7, 3);
+  ctx.fill();
+
+  // hood collar around the neck
+  ctx.fillStyle = '#1A46C4';
+  roundRect(ctx, x+6, y+12, w-12, 7, 4);
+  ctx.fill();
+  // drawstrings
+  ctx.strokeStyle = '#0A0B0D';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx-3, y+16); ctx.lineTo(cx-3, y+22);
+  ctx.moveTo(cx+3, y+16); ctx.lineTo(cx+3, y+22);
+  ctx.stroke();
+
+  // ---- head ----
+  const headCX = cx, headCY = y+9, headR = 8.5;
+  ctx.fillStyle = '#EDB88B';
+  ctx.beginPath();
+  ctx.arc(headCX, headCY, headR, 0, Math.PI*2);
+  ctx.fill();
+  // ear
+  ctx.beginPath();
+  ctx.arc(headCX-headR+1, headCY+2, 1.6, 0, Math.PI*2);
+  ctx.fill();
+  // eye (facing running direction)
+  ctx.fillStyle = '#20242C';
+  ctx.beginPath();
+  ctx.arc(headCX+3.2, headCY+1, 1.3, 0, Math.PI*2);
+  ctx.fill();
+  // little smile
+  ctx.strokeStyle = '#8A5A3C';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(headCX+2, headCY+4, 2, 0.1, Math.PI-0.4);
+  ctx.stroke();
+
+  // ---- cap ----
+  ctx.fillStyle = '#1440C7';
+  ctx.beginPath();
+  ctx.arc(headCX, headCY-1, headR+2, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
+  // cap band
+  ctx.fillStyle = '#0E2E96';
+  roundRect(ctx, headCX-headR-1, headCY-2, (headR+2)*2, 3.5, 2);
+  ctx.fill();
+  // cap brim (pointing forward, in running direction)
+  ctx.fillStyle = '#0E2E96';
+  roundRect(ctx, headCX+2, headCY-2.5, 11, 3.5, 1.5);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawObstacle(o){
+  const gY = H()*GROUND_Y_RATIO;
+  const y = gY - o.h;
+  ctx.save();
+  ctx.shadowColor='rgba(255,92,77,0.55)';
+  ctx.shadowBlur=10;
+  ctx.fillStyle = '#FF5C4D';
+  if(o.type === 'spike'){
+    ctx.beginPath();
+    ctx.moveTo(o.x, gY);
+    ctx.lineTo(o.x+o.w/2, y);
+    ctx.lineTo(o.x+o.w, gY);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    roundRect(ctx, o.x, y, o.w, o.h, 4);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCoin(c){
+  const gY = H()*GROUND_Y_RATIO;
+  const y = gY - 90 + Math.sin(frame*0.15)*6;
+  ctx.save();
+  ctx.translate(c.x, y);
+  ctx.shadowColor='rgba(255,184,0,0.7)';
+  ctx.shadowBlur=16;
+  ctx.fillStyle='#FFB800';
+  const s=14;
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const ang = Math.PI/3*i - Math.PI/2;
+    const px = Math.cos(ang)*s, py = Math.sin(ang)*s;
+    i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#1A1400';
+  ctx.font='bold 12px Inter, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('B', 0, 1);
+  ctx.restore();
+}
+
+// ---------- UPDATE ----------
+function update(){
+  frame++;
+  distance += speed/12; // ~ meters
+  speed = Math.min(11, 4 + distance/900); // slower start, gradual ramp-up
+  updateHUD();
+  scrollLedger();
+
+  // player physics
+  player.vy += 0.62;
+  player.y += player.vy;
+  if(player.y >= player.groundY){
+    player.y = player.groundY;
+    player.vy = 0;
+    player.jumping = false;
+  }
+
+  // obstacles
+  obstacles.forEach(o => o.x -= speed);
+  if(obstacles.length && obstacles[0].x < -60){ obstacles.shift(); }
+  if(obstacles.length < 3) spawnObstacle(false);
+
+  // collision
+  const gY = H()*GROUND_Y_RATIO;
+  for(const o of obstacles){
+    const oy = gY - o.h;
+    if(player.x+6 < o.x+o.w && player.x+player.w-6 > o.x &&
+       player.y+player.h > oy+4){
+      gameOver();
+      return;
+    }
+  }
+
+  // coin every 100m
+  const coinStep = Math.floor(distance/100);
+  if(coinStep > lastCoinStep){
+    lastCoinStep = coinStep;
+    coins++;
+    coinSprite = {x: player.x + 120, life: 30};
+  }
+  if(coinSprite){
+    coinSprite.life--;
+    if(coinSprite.life <= 0) coinSprite = null;
+  }
+
+  // daily run claim every 500m
+  const claimStep = Math.floor(distance/500);
+  if(claimStep > lastClaimStep){
+    lastClaimStep = claimStep;
+    openClaimModal();
+  }
+}
+
+function render(){
+  drawBackground();
+  obstacles.forEach(drawObstacle);
+  if(coinSprite) drawCoin(coinSprite);
+  drawPlayer();
+}
+
+function loop(){
+  if(state === 'running'){ update(); }
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ---------- ⛓ CLAIM / ON-CHAIN FLOW ----------
+let pendingClaimType = 'run'; // 'run' | 'checkin'
+
+function openClaimModal(){
+  pendingClaimType = 'run';
+  state = 'paused-claim';
+  pauseBtn.style.display = 'none';
+  const stepM = Math.floor(distance/500)*500;
+  rcTitle.textContent = 'Daily Run Claim';
+  rcSub.textContent = 'Record your run distance on the Base network';
+  rcDistRow.style.display = 'flex';
+  rcRewardRow.style.display = 'flex';
+  rcDist.textContent = stepM + ' m';
+  rcReward.textContent = '+' + (stepM/500) + ' BASE-XP';
+  txStatus.textContent = '';
+  claimConfirm.disabled = false;
+  receipt.classList.remove('hidden');
+}
+
+function openCheckinModal(){
+  pendingClaimType = 'checkin';
+  const wasRunning = state === 'running';
+  if(wasRunning){ state = 'paused-claim'; pauseBtn.style.display = 'none'; }
+  rcTitle.textContent = 'Daily Check-in';
+  rcSub.textContent = 'A small once-a-day transaction on the Base network';
+  rcDistRow.style.display = 'none';
+  rcRewardRow.style.display = 'none';
+  txStatus.textContent = '';
+  claimConfirm.disabled = false;
+  receipt.dataset.resumeRun = wasRunning ? '1' : '0';
+  receipt.classList.remove('hidden');
+}
+
+function closeClaimModal(resume){
+  receipt.classList.add('hidden');
+  if(resume && state === 'paused-claim'){ state = 'running'; pauseBtn.style.display = 'flex'; }
+}
+claimCancel.addEventListener('click', ()=> closeClaimModal(true));
+
+claimConfirm.addEventListener('click', async ()=>{
+  claimConfirm.disabled = true;
+  const distSnapshot = Math.floor(distance/500)*500;
+  try{
+    if(!signer){
+      txStatus.textContent = 'Connect your wallet first…';
+      await connectWallet();
+      if(!signer){ claimConfirm.disabled = false; return; }
+    }
+    if(pendingClaimType === 'checkin'){
+      txStatus.textContent = 'Sending Daily Check-in to Base…';
+      const txHash = await sendCheckInTx();
+      txStatus.textContent = `Checked in ✅ tx: ${txHash.slice(0,10)}…`;
+      lastCheckInAt = Math.floor(Date.now()/1000);
+      updateCheckinButton();
+    } else {
+      txStatus.textContent = 'Sending transaction to Base…';
+      const txHash = await sendClaimTx(distSnapshot);
+      txStatus.textContent = `Claimed ✅ tx: ${txHash.slice(0,10)}…`;
+    }
+    refreshOnChainStats();
+    setTimeout(()=> closeClaimModal(true), 1400);
+  }catch(err){
+    console.error(err);
+    txStatus.textContent = 'Transaction rejected or failed. Try again.';
+    claimConfirm.disabled = false;
+  }
+});
+
+// ⛓ Sends the on-chain "Daily Run" claim. Wire CONTRACT_ADDRESS/ABI above
+// to a real deployed contract before production use.
+async function sendClaimTx(distanceMeters){
+  if(!window.ethers){
+    // ethers not loaded (offline / CDN blocked) — fall back to a raw
+    // eth_sendTransaction so the flow still works without the ABI encoder.
+    const txParams = {
+      from: userAddress,
+      to: CONTRACT_ADDRESS,
+      value: '0x0',
+      // NOTE: raw fallback with no calldata — replace with proper
+      // encodeFunctionData once ethers is available, or use wagmi/viem.
+    };
+    return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
+  }
+  const iface = new ethers.Interface(CONTRACT_ABI);
+  const data = iface.encodeFunctionData('claimDailyRun', [distanceMeters]);
+  const tx = await signer.sendTransaction({ to: CONTRACT_ADDRESS, data });
+  await tx.wait?.(1);
+  return tx.hash;
+}
+
+// ⛓ Sends the on-chain "Daily Check-in" transaction — a lightweight,
+// once-per-24h call separate from the distance-based Daily Run claim.
+async function sendCheckInTx(){
+  if(!window.ethers){
+    const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x0' };
+    return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
+  }
+  const iface = new ethers.Interface(CONTRACT_ABI);
+  const data = iface.encodeFunctionData('dailyCheckIn', []);
+  const tx = await signer.sendTransaction({ to: CONTRACT_ADDRESS, data });
+  await tx.wait?.(1);
+  return tx.hash;
+}
+
+// ⛓ Reads the player's on-chain best distance and last check-in time.
+// Uses a read-only RPC provider so this works without prompting the
+// wallet, and even before a signer is available.
+async function refreshOnChainStats(){
+  if(!userAddress || !window.ethers) return;
+  try{
+    if(!readProvider) readProvider = new ethers.JsonRpcProvider(CHAIN.rpc);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, readProvider);
+    const [best, lastCheckIn] = await Promise.all([
+      contract.bestDistanceOf(userAddress),
+      contract.lastCheckInOf(userAddress),
+    ]);
+    onChainBest = Number(best);
+    lastCheckInAt = Number(lastCheckIn);
+    updateCheckinButton();
+  }catch(err){
+    console.error('on-chain read failed', err);
+  }
+}
+
+function updateCheckinButton(){
+  if(!userAddress){
+    checkinBtn.textContent = 'Daily Check-in ⬢';
+    checkinBtn.disabled = false;
+    checkinBtn.classList.remove('done');
+    return;
+  }
+  const nowSec = Math.floor(Date.now()/1000);
+  const remaining = (lastCheckInAt + CHECK_IN_COOLDOWN_SEC) - nowSec;
+  if(remaining > 0){
+    const h = Math.floor(remaining/3600), m = Math.floor((remaining%3600)/60);
+    checkinBtn.textContent = `Next check-in in ${h}h ${m}m`;
+    checkinBtn.disabled = true;
+    checkinBtn.classList.add('done');
+  } else {
+    checkinBtn.textContent = 'Daily Check-in ⬢';
+    checkinBtn.disabled = false;
+    checkinBtn.classList.remove('done');
+  }
+}
+setInterval(updateCheckinButton, 30000); // keep the cooldown countdown fresh
+
+// ---------- ⛓ WALLET CONNECT (Base network) ----------
+async function connectWallet(){
+  if(!window.ethereum){
+    walletValEl.textContent = 'No wallet found';
+    alert('This mini-app needs to be opened inside Base App / Coinbase Wallet, or a browser with an injected wallet.');
+    return;
+  }
+  try{
+    const accounts = await window.ethereum.request({ method:'eth_requestAccounts' });
+    userAddress = accounts[0];
+    await ensureBaseNetwork();
+    if(window.ethers){
+      provider = new ethers.BrowserProvider(window.ethereum);
+      signer = await provider.getSigner();
+    } else {
+      signer = true; // fallback marker so claim flow proceeds via raw RPC
+    }
+    walletValEl.textContent = userAddress.slice(0,6)+'…'+userAddress.slice(-4);
+    connectBtn.textContent = 'Connected ✓ ' + walletValEl.textContent;
+    connectBtn.classList.add('connected');
+    claimBtn.classList.add('ready');
+    updateCheckinButton();
+    refreshOnChainStats();
+  }catch(err){
+    console.error(err);
+    walletValEl.textContent = 'Connection failed';
+  }
+}
+
+async function ensureBaseNetwork(){
+  try{
+    await window.ethereum.request({
+      method:'wallet_switchEthereumChain',
+      params:[{ chainId: CHAIN.hex }],
+    });
+  }catch(switchErr){
+    if(switchErr.code === 4902){
+      await window.ethereum.request({
+        method:'wallet_addEthereumChain',
+        params:[{
+          chainId: CHAIN.hex,
+          chainName: CHAIN.name,
+          nativeCurrency:{ name:'Ether', symbol:'ETH', decimals:18 },
+          rpcUrls:[CHAIN.rpc],
+          blockExplorerUrls:[CHAIN.explorer],
+        }],
+      });
+    }
+  }
+}
+
+connectBtn.addEventListener('click', connectWallet);
+claimBtn.addEventListener('click', ()=>{
+  if(state === 'running') openClaimModal();
+});
+checkinBtn.addEventListener('click', ()=>{
+  if(checkinBtn.disabled) return;
+  openCheckinModal();
+});
+
+// try silent auto-connect if a provider is already authorized (e.g. inside Base App)
+if(window.ethereum){
+  window.ethereum.request({ method:'eth_accounts' }).then(accs=>{
+    if(accs && accs[0]){ connectWallet(); }
+  }).catch(()=>{});
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+</body>
+</html>
