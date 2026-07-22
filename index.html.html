@@ -4,13 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Base Runner</title>
-<!-- Loaded here (before the game script) so window.ethers is guaranteed to exist
-     by the time connectWallet()/sendClaimTx()/sendCheckInTx() run. Loading it at
-     the end of <body> instead caused a race: an early connect (e.g. silent
-     auto-connect on load) could grab a boolean `true` fallback signer before
-     ethers finished loading, and later calls would crash on
-     `signer.sendTransaction is not a function`. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
 <style>
   :root{
     --bg:#0A0B0D;
@@ -313,6 +306,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
 <script>
 /* =========================================================
    BASE RUNNER — endless runner mini-app for Base
@@ -1025,11 +1019,9 @@ claimConfirm.addEventListener('click', async ()=>{
 // ⛓ Sends the on-chain "Daily Run" claim. Wire CONTRACT_ADDRESS/ABI above
 // to a real deployed contract before production use.
 async function sendClaimTx(distanceMeters){
-  // Check the real signer, not window.ethers — connectWallet() is what decides
-  // whether we have a usable ethers signer, so that's the single source of truth.
-  if(!provider || signer === true){
-    // No ethers signer available — fall back to a raw eth_sendTransaction so the
-    // flow still works without the ABI encoder.
+  if(!window.ethers){
+    // ethers not loaded (offline / CDN blocked) — fall back to a raw
+    // eth_sendTransaction so the flow still works without the ABI encoder.
     const txParams = {
       from: userAddress,
       to: CONTRACT_ADDRESS,
@@ -1049,7 +1041,7 @@ async function sendClaimTx(distanceMeters){
 // ⛓ Sends the on-chain "Daily Check-in" transaction — a lightweight,
 // once-per-24h call separate from the distance-based Daily Run claim.
 async function sendCheckInTx(){
-  if(!provider || signer === true){
+  if(!window.ethers){
     const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x0' };
     return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
   }
