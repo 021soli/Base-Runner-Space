@@ -1025,7 +1025,7 @@ async function sendClaimTx(distanceMeters){
     const txParams = {
       from: userAddress,
       to: CONTRACT_ADDRESS,
-      value: '0x3721C3de128e8F7CC44e9D89Dd1ad45B6959Cfb2',
+      value: '0x0',
       // NOTE: raw fallback with no calldata — replace with proper
       // encodeFunctionData once ethers is available, or use wagmi/viem.
     };
@@ -1042,7 +1042,7 @@ async function sendClaimTx(distanceMeters){
 // once-per-24h call separate from the distance-based Daily Run claim.
 async function sendCheckInTx(){
   if(!window.ethers){
-    const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x3721C3de128e8F7CC44e9D89Dd1ad45B6959Cfb2' };
+    const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x0' };
     return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
   }
   const iface = new ethers.Interface(CONTRACT_ABI);
