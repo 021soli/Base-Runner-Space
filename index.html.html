@@ -333,6 +333,28 @@ const CONTRACT_ABI = [
 ];
 const CHECK_IN_COOLDOWN_SEC = 24*60*60; // must match the contract's cooldown
 
+// --- BASE BUILDER CODE ATTRIBUTION (ERC-8021) ---
+// Registered at base.dev → Settings → Builder Code.
+// Appending this suffix to onchain tx calldata attributes the tx to this app
+// for Base's analytics/rewards program. Contracts ignore the extra bytes.
+const BUILDER_CODE = "bc_nszobw6j";
+
+// Builds an ERC-8021 (schema 0) data suffix: [codeLen(1B)][code ASCII][schemaId=0(1B)][marker 0x8021 x8 (16B)]
+function buildErc8021Suffix(code){
+  const codeBytes = new TextEncoder().encode(code);
+  if(codeBytes.length > 255) throw new Error('Builder code too long for ERC-8021 schema 0');
+  const toHex = n => n.toString(16).padStart(2, '0');
+  const lenHex = toHex(codeBytes.length);
+  const codeHex = Array.from(codeBytes).map(toHex).join('');
+  const schemaIdHex = '00';
+  const markerHex = '8021'.repeat(8); // 16 bytes
+  return '0x' + lenHex + codeHex + schemaIdHex + markerHex;
+}
+const DATA_SUFFIX = BUILDER_CODE ? buildErc8021Suffix(BUILDER_CODE) : null;
+function withAttribution(data){
+  return DATA_SUFFIX ? (data + DATA_SUFFIX.slice(2)) : data;
+}
+
 let provider = null;     // ethers.BrowserProvider
 let readProvider = null; // read-only provider, works even without a connected wallet
 let onChainBest = 0;      // meters, fetched from the contract
@@ -1026,13 +1048,12 @@ async function sendClaimTx(distanceMeters){
       from: userAddress,
       to: CONTRACT_ADDRESS,
       value: '0x0',
-      // NOTE: raw fallback with no calldata — replace with proper
-      // encodeFunctionData once ethers is available, or use wagmi/viem.
+      data: withAttribution('0x'),
     };
     return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
   }
   const iface = new ethers.Interface(CONTRACT_ABI);
-  const data = iface.encodeFunctionData('claimDailyRun', [distanceMeters]);
+  const data = withAttribution(iface.encodeFunctionData('claimDailyRun', [distanceMeters]));
   const tx = await signer.sendTransaction({ to: CONTRACT_ADDRESS, data });
   await tx.wait?.(1);
   return tx.hash;
@@ -1042,11 +1063,11 @@ async function sendClaimTx(distanceMeters){
 // once-per-24h call separate from the distance-based Daily Run claim.
 async function sendCheckInTx(){
   if(!window.ethers){
-    const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x0' };
+    const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x0', data: withAttribution('0x') };
     return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
   }
   const iface = new ethers.Interface(CONTRACT_ABI);
-  const data = iface.encodeFunctionData('dailyCheckIn', []);
+  const data = withAttribution(iface.encodeFunctionData('dailyCheckIn', []));
   const tx = await signer.sendTransaction({ to: CONTRACT_ADDRESS, data });
   await tx.wait?.(1);
   return tx.hash;
