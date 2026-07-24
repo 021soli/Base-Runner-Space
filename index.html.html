@@ -970,6 +970,28 @@ function loop(){
 }
 loop();
 
+// ---------- 🔔 IN-APP NOTIFICATIONS (via our own /api/send-notification) ----------
+// This calls OUR backend, never the Base API directly — the Base API key
+// must stay server-side only. Safe to call even if not deployed on Vercel
+// yet: fetch failures are caught and ignored so the game never breaks.
+async function notifyPlayer(title, message, target_path){
+  if(!userAddress) return;
+  try{
+    await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wallet_addresses: [userAddress],
+        title,
+        message,
+        target_path,
+      }),
+    });
+  }catch(err){
+    console.warn('notification send skipped:', err);
+  }
+}
+
 // ---------- ⛓ CLAIM / ON-CHAIN FLOW ----------
 let pendingClaimType = 'run'; // 'run' | 'checkin'
 
@@ -1024,10 +1046,12 @@ claimConfirm.addEventListener('click', async ()=>{
       txStatus.textContent = `Checked in ✅ tx: ${txHash.slice(0,10)}…`;
       lastCheckInAt = Math.floor(Date.now()/1000);
       updateCheckinButton();
+      notifyPlayer('Check-in complete ⬢', 'Your daily check-in landed on Base. Come back tomorrow!', '/');
     } else {
       txStatus.textContent = 'Sending transaction to Base…';
       const txHash = await sendClaimTx(distSnapshot);
       txStatus.textContent = `Claimed ✅ tx: ${txHash.slice(0,10)}…`;
+      notifyPlayer('Daily Run claimed ⬢', `You claimed +${distSnapshot/500} BASE-XP for ${distSnapshot}m. Nice run!`, '/');
     }
     refreshOnChainStats();
     setTimeout(()=> closeClaimModal(true), 1400);
