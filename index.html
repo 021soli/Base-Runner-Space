@@ -340,16 +340,16 @@ const CHECK_IN_COOLDOWN_SEC = 24*60*60; // must match the contract's cooldown
 // for Base's analytics/rewards program. Contracts ignore the extra bytes.
 const BUILDER_CODE = "bc_nszobw6j";
 
-// Builds an ERC-8021 (schema 0) data suffix: [codeLen(1B)][code ASCII][schemaId=0(1B)][marker 0x8021 x8 (16B)]
+// Builds an ERC-8021 (schema 0) data suffix: [code ASCII][codeLen(1B)][schemaId=0(1B)][marker 0x8021 x8 (16B)]
 function buildErc8021Suffix(code){
   const codeBytes = new TextEncoder().encode(code);
   if(codeBytes.length > 255) throw new Error('Builder code too long for ERC-8021 schema 0');
   const toHex = n => n.toString(16).padStart(2, '0');
-  const lenHex = toHex(codeBytes.length);
   const codeHex = Array.from(codeBytes).map(toHex).join('');
+  const lenHex = toHex(codeBytes.length);
   const schemaIdHex = '00';
   const markerHex = '8021'.repeat(8); // 16 bytes
-  return '0x' + lenHex + codeHex + schemaIdHex + markerHex;
+  return '0x' + codeHex + lenHex + schemaIdHex + markerHex;
 }
 const DATA_SUFFIX = BUILDER_CODE ? buildErc8021Suffix(BUILDER_CODE) : null;
 function withAttribution(data){
