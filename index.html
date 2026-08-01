@@ -1080,11 +1080,25 @@ claimConfirm.addEventListener('click', async ()=>{
 // the Mini App SDK's provider when inside Base App/Farcaster, otherwise
 // whatever the regular browser injected (MetaMask, Coinbase extension, etc).
 let ethProvider = null;
+
+function withTimeout(promise, ms){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
 async function getEthProvider(){
   if(ethProvider) return ethProvider;
   try{
-    if(window.miniapp?.sdk?.wallet?.getEthereumProvider){
-      const p = await window.miniapp.sdk.wallet.getEthereumProvider();
+    // isInMiniApp() resolves fast and tells us up front whether we're even
+    // inside a real host — skip getEthereumProvider() entirely otherwise,
+    // since that call can hang forever waiting for a parent frame that isn't there.
+    const inMiniApp = window.miniapp?.sdk?.isInMiniApp
+      ? await withTimeout(window.miniapp.sdk.isInMiniApp(), 800).catch(() => false)
+      : false;
+    if(inMiniApp && window.miniapp?.sdk?.wallet?.getEthereumProvider){
+      const p = await withTimeout(window.miniapp.sdk.wallet.getEthereumProvider(), 1500);
       if(p){ ethProvider = p; return ethProvider; }
     }
   }catch(err){
@@ -1099,7 +1113,7 @@ async function getEthProvider(){
 (async function initMiniAppHost(){
   try{
     if(window.miniapp?.sdk?.actions?.ready){
-      await window.miniapp.sdk.actions.ready();
+      await withTimeout(window.miniapp.sdk.actions.ready(), 1500);
     }
   }catch(err){
     console.warn('sdk.actions.ready() failed (fine if just testing in a normal browser)', err);
