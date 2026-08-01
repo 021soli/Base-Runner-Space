@@ -5,6 +5,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Base Runner</title>
+<!-- Loaded here (before the game script) so window.ethers is guaranteed to exist
+     by the time connectWallet()/sendClaimTx()/sendCheckInTx() run. Loading it at
+     the end of <body> caused a race: an early connect (e.g. silent auto-connect
+     on load) could grab a boolean `true` fallback signer before ethers finished
+     loading, and later calls would crash on `signer.sendTransaction is not a
+     function`. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+<!-- Farcaster / Base App Mini App SDK — needed when this page runs INSIDE Base
+     App or a Farcaster client. sdk.actions.ready() hides the host splash screen
+     (skipping it is the #1 cause of a mini app looking "stuck"), and
+     sdk.wallet.getEthereumProvider() is the real wallet provider inside that
+     host — window.ethereum is not reliably injected there. -->
+<script src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"></script>
 <style>
   :root{
     --bg:#0A0B0D;
@@ -307,7 +320,6 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
 <script>
 /* =========================================================
    BASE RUNNER — endless runner mini-app for Base
@@ -1063,19 +1075,51 @@ claimConfirm.addEventListener('click', async ()=>{
   }
 });
 
+// ---------- 🖼️ MINI APP HOST DETECTION ----------
+// Resolves to the EIP-1193 provider we should actually use for wallet calls:
+// the Mini App SDK's provider when inside Base App/Farcaster, otherwise
+// whatever the regular browser injected (MetaMask, Coinbase extension, etc).
+let ethProvider = null;
+async function getEthProvider(){
+  if(ethProvider) return ethProvider;
+  try{
+    if(window.miniapp?.sdk?.wallet?.getEthereumProvider){
+      const p = await window.miniapp.sdk.wallet.getEthereumProvider();
+      if(p){ ethProvider = p; return ethProvider; }
+    }
+  }catch(err){
+    console.warn('Mini App wallet provider unavailable, falling back to window.ethereum', err);
+  }
+  if(window.ethereum){ ethProvider = window.ethereum; return ethProvider; }
+  return null;
+}
+
+// Hide the host splash screen as soon as the game UI is ready — skipping this
+// leaves Base App/Farcaster stuck on an infinite loading screen.
+(async function initMiniAppHost(){
+  try{
+    if(window.miniapp?.sdk?.actions?.ready){
+      await window.miniapp.sdk.actions.ready();
+    }
+  }catch(err){
+    console.warn('sdk.actions.ready() failed (fine if just testing in a normal browser)', err);
+  }
+})();
+
 // ⛓ Sends the on-chain "Daily Run" claim. Wire CONTRACT_ADDRESS/ABI above
 // to a real deployed contract before production use.
 async function sendClaimTx(distanceMeters){
-  if(!window.ethers){
-    // ethers not loaded (offline / CDN blocked) — fall back to a raw
-    // eth_sendTransaction so the flow still works without the ABI encoder.
+  // Check the real signer, not window.ethers — connectWallet() is what decides
+  // whether we have a usable ethers signer, so that's the single source of truth.
+  if(!provider || signer === true){
+    const eth = await getEthProvider();
     const txParams = {
       from: userAddress,
       to: CONTRACT_ADDRESS,
       value: '0x0',
       data: withAttribution('0x'),
     };
-    return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
+    return await eth.request({ method:'eth_sendTransaction', params:[txParams] });
   }
   const iface = new ethers.Interface(CONTRACT_ABI);
   const data = withAttribution(iface.encodeFunctionData('claimDailyRun', [distanceMeters]));
@@ -1087,9 +1131,10 @@ async function sendClaimTx(distanceMeters){
 // ⛓ Sends the on-chain "Daily Check-in" transaction — a lightweight,
 // once-per-24h call separate from the distance-based Daily Run claim.
 async function sendCheckInTx(){
-  if(!window.ethers){
+  if(!provider || signer === true){
+    const eth = await getEthProvider();
     const txParams = { from: userAddress, to: CONTRACT_ADDRESS, value: '0x0', data: withAttribution('0x') };
-    return await window.ethereum.request({ method:'eth_sendTransaction', params:[txParams] });
+    return await eth.request({ method:'eth_sendTransaction', params:[txParams] });
   }
   const iface = new ethers.Interface(CONTRACT_ABI);
   const data = withAttribution(iface.encodeFunctionData('dailyCheckIn', []));
@@ -1142,17 +1187,18 @@ setInterval(updateCheckinButton, 30000); // keep the cooldown countdown fresh
 
 // ---------- ⛓ WALLET CONNECT (Base network) ----------
 async function connectWallet(){
-  if(!window.ethereum){
+  const eth = await getEthProvider();
+  if(!eth){
     walletValEl.textContent = 'No wallet found';
     alert('This mini-app needs to be opened inside Base App / Coinbase Wallet, or a browser with an injected wallet.');
     return;
   }
   try{
-    const accounts = await window.ethereum.request({ method:'eth_requestAccounts' });
+    const accounts = await eth.request({ method:'eth_requestAccounts' });
     userAddress = accounts[0];
     await ensureBaseNetwork();
     if(window.ethers){
-      provider = new ethers.BrowserProvider(window.ethereum);
+      provider = new ethers.BrowserProvider(eth);
       signer = await provider.getSigner();
     } else {
       signer = true; // fallback marker so claim flow proceeds via raw RPC
@@ -1170,14 +1216,15 @@ async function connectWallet(){
 }
 
 async function ensureBaseNetwork(){
+  const eth = await getEthProvider();
   try{
-    await window.ethereum.request({
+    await eth.request({
       method:'wallet_switchEthereumChain',
       params:[{ chainId: CHAIN.hex }],
     });
   }catch(switchErr){
     if(switchErr.code === 4902){
-      await window.ethereum.request({
+      await eth.request({
         method:'wallet_addEthereumChain',
         params:[{
           chainId: CHAIN.hex,
@@ -1201,11 +1248,12 @@ checkinBtn.addEventListener('click', ()=>{
 });
 
 // try silent auto-connect if a provider is already authorized (e.g. inside Base App)
-if(window.ethereum){
-  window.ethereum.request({ method:'eth_accounts' }).then(accs=>{
+getEthProvider().then(eth=>{
+  if(!eth) return;
+  eth.request({ method:'eth_accounts' }).then(accs=>{
     if(accs && accs[0]){ connectWallet(); }
   }).catch(()=>{});
-}
+});
 </script>
 </body>
 </html>
